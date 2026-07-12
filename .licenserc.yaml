@@ -1,0 +1,38 @@
+header:
+  license:
+    spdx-id: Apache-2.0
+    content: |
+      SPDX-License-Identifier: Apache-2.0
+      Copyright Maciej Sawicki
+
+  language:
+    tftpl:
+      extensions:
+        - ".tftpl"
+      comment_style:
+        line: "#"
+    tftest:
+      extensions:
+        - ".tftest.hcl"
+      comment_style:
+        line: "#"
+
+  paths-ignore:
+    - 'LICENSE'
+    - '.gitignore'
+    - '.tflint.hcl'
+    - '.terraform-docs.yml'
+    - '.pre-commit-config.yaml'
+    - '.licenserc.yaml'
+    - 'renovate.json'
+    - '**/*.md'
+    - '**/*.json'
+    - '**/*.tfvars'
+    - '**/*.tfvars.example'
+    - '.github/ISSUE_TEMPLATE/**'
+    - '.github/PULL_REQUEST_TEMPLATE.md'
+    # .yaml.tftpl compound extension not supported by license-eye;
+    # headers are added manually to these files
+    - '**/*.yaml.tftpl'
+
+  comment: on-failure

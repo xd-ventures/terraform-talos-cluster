@@ -1,0 +1,26 @@
+# OpenTofu / Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Credentials / local env
+.env
+.env.*
+*.pem
+kubeconfig
+talosconfig
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright Maciej Sawicki
+
+# SBOM generation, carried over from the consumer repo (ADR-0016 decision 5):
+# CycloneDX SBOM of the repository (providers, actions, pre-commit deps) as a
+# build artifact on main, attached to every release. Scope grows with the
+# module code (container image pins in variables.tf get picked up by trivy on
+# the same scan).
+name: SBOM Generation
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Trivy
+        run: |
+          # renovate: datasource=github-releases depName=aquasecurity/trivy
+          TRIVY_VERSION="0.69.3"
+          curl -sfL -o trivy.deb "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.deb"
+          sudo dpkg -i trivy.deb
+          rm trivy.deb
+          trivy --version
+
+      - name: Repository SBOM
+        run: |
+          mkdir -p sbom-output
+          trivy fs . \
+            --scanners vuln,license \
+            --format cyclonedx \
+            --output sbom-output/repo.cdx.json \
+            --list-all-pkgs
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sbom
+          path: sbom-output/
+          retention-days: 90
+
+      - name: Attach SBOM to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            sbom-output/repo.cdx.json --clobber

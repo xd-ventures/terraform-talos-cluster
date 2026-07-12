@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright Maciej Sawicki
+
+# Module CI (ADR-0016 decision 7, #321): pre-commit (fmt, validate, tflint
+# preset=all, terraform-docs drift, gitleaks, shellcheck, SPDX headers) plus
+# plan-only `tofu test`. NO cloud credentials at this phase — paid e2e arrives
+# with its own gated workflow (#330/#331) and a reviewer-protected environment.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: read-all
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    name: Pre-commit Checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2
+        with:
+          tofu_wrapper: false
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6
+
+      - name: Setup terraform-docs
+        run: |
+          # renovate: datasource=github-releases depName=terraform-docs/terraform-docs
+          TFDOCS_VERSION="0.20.0"
+          curl -sfL -o tfdocs.tar.gz \
+            "https://github.com/terraform-docs/terraform-docs/releases/download/v${TFDOCS_VERSION}/terraform-docs-v${TFDOCS_VERSION}-linux-amd64.tar.gz"
+          tar -xzf tfdocs.tar.gz terraform-docs
+          sudo install terraform-docs /usr/local/bin/
+          rm -f tfdocs.tar.gz terraform-docs
+          terraform-docs --version
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit
+        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+        with:
+          extra_args: --all-files --show-diff-on-failure
+
+  tofu-test:
+    name: Plan-only tofu test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2
+        with:
+          tofu_wrapper: false
+
+      - name: Init (no backend, no credentials)
+        run: tofu init -backend=false -input=false
+
+      - name: Validate
+        run: tofu validate
+
+      - name: Test (plan-only / mocked)
+        run: tofu test
+
+      - name: Validate examples
+        run: |
+          set -euo pipefail
+          for dir in examples/*/; do
+            echo "=== $dir ==="
+            tofu -chdir="$dir" init -backend=false -input=false
+            tofu -chdir="$dir" validate
+          done

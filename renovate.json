@@ -1,0 +1,82 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":gitSignOff",
+    ":rebaseStalePrs",
+    ":enablePreCommit"
+  ],
+  "semanticCommitType": "chore",
+  "labels": ["dependencies"],
+  "schedule": ["before 9am on Monday"],
+  "timezone": "Europe/Warsaw",
+  "prHourlyLimit": 3,
+  "prConcurrentLimit": 5,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["dependencies", "security"],
+    "schedule": ["at any time"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/variables\\.tf$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?\\n.*?default\\s*=\\s*\"(?<currentValue>[^@\"]*)\""
+      ],
+      "description": "Version pins in variables.tf (plain values; image tag@digest pins are handled by the manager below)"
+    },
+    {
+      "customType": "regex",
+      "description": "Container image pins in variables.tf as repo:tag@digest — tag and digest update atomically",
+      "managerFilePatterns": ["/variables\\.tf$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\n\\s*default\\s*=\\s*\"(?:[\\w./-]+:)?(?<currentValue>[\\w.-]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "talos_version / kubernetes_version move in lockstep with the Talos support matrix and are bumped manually, never by Renovate (ADR-0016 decision 8, #269 lesson). Explicit rule so a preset refresh cannot resurrect them.",
+      "matchPackageNames": [
+        "siderolabs/talos",
+        "kubernetes/kubernetes",
+        "kubernetes"
+      ],
+      "matchFileNames": ["**/variables.tf"],
+      "enabled": false
+    },
+    {
+      "description": "Group all GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "automerge": false
+    },
+    {
+      "description": "Group all pre-commit hook updates",
+      "matchManagers": ["pre-commit"],
+      "groupName": "pre-commit-hooks",
+      "automerge": false
+    },
+    {
+      "description": "Flag major updates for extra review",
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "major-update"],
+      "prBodyNotes": [
+        "This is a **major version update**. Review changelog for breaking changes before merging."
+      ]
+    },
+    {
+      "description": "Delay adoption of pre-1.0 provider updates by 3 days",
+      "matchManagers": ["terraform"],
+      "matchPackageNames": ["siderolabs/talos", "tailscale/tailscale"],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Docker image pins: delay 3 days (CI tags churn)",
+      "matchDatasources": ["docker"],
+      "minimumReleaseAge": "3 days"
+    }
+  ]
+}
